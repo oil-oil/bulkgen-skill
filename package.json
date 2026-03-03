@@ -1,0 +1,28 @@
+{
+  "name": "@linzhihuang/bulkgen-skill",
+  "version": "1.0.0",
+  "description": "BulkGen Agent Skill - Generate AI images efficiently with one API call for multiple outputs",
+  "main": "bulkgen.skill",
+  "files": [
+    "bulkgen.skill",
+    "bulkgen/"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "skill",
+    "ai",
+    "image-generation",
+    "bulkgen",
+    "batch-generation"
+  ],
+  "author": "linzhihuang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/linzhihuang/bulkgen-skill.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
