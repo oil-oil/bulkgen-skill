@@ -66,7 +66,7 @@ Single prompt, single image output.
 }
 ```
 
-### Batch (2-20 images)
+### Batch (2-16 images)
 
 Each cell has its own prompt for distinct images.
 
@@ -83,7 +83,7 @@ Each cell has its own prompt for distinct images.
 }
 ```
 
-### Variation (2-20 images)
+### Variation (2-16 images)
 
 One prompt, AI generates creative variations.
 
@@ -101,11 +101,11 @@ One prompt, AI generates creative variations.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `mode` | string | No | `solo`, `batch`, or `variation`. Default: `batch` |
-| `cols` | number | Yes | Grid columns (1-5) |
-| `rows` | number | Yes | Grid rows (1-5) |
+| `cols` | number | Yes | Grid columns (by supported layout) |
+| `rows` | number | Yes | Grid rows (by supported layout) |
 | `sourceRatio` | string | No | Source aspect ratio. Default: `1:1` |
 | `outputRatio` | string | No | Output aspect ratio. Default: same as source |
-| `prompts` | string[] | No | Array of prompts. Defaults provided if empty |
+| `prompts` | string[] | Yes | Array of prompts. At least one non-empty prompt required |
 | `resolution` | string | No | `1K`, `2K`, or `4K`. Default: `1K` |
 
 ### Supported Aspect Ratios
@@ -125,29 +125,29 @@ One prompt, AI generates creative variations.
 | 9 | 3x3 |
 | 12 | 4x3, 3x4 |
 | 16 | 4x4 |
-| 20 | 5x4, 4x5 |
 
 ## Response
 
 ```json
 {
-  "images": ["base64_encoded_png_1", "base64_encoded_png_2", ...]
+  "expiresAt": "2026-03-06T12:00:00.000Z",
+  "images": [
+    {
+      "id": "uuid",
+      "filePath": "user_id/timestamp-1-uuid.png",
+      "url": "https://signed-url...",
+      "expiresAt": "2026-03-06T12:00:00.000Z"
+    }
+  ]
 }
 ```
 
-Each image is a base64-encoded PNG string. Decode and save to file:
-
-```python
-import base64
-with open("image.png", "wb") as f:
-    f.write(base64.b64decode(response["images"][0]))
-```
+Each image object contains a signed URL that expires after 12 hours. Download or display images using the `url` field.
 
 ## Example: Python
 
 ```python
 import os
-import base64
 import requests
 
 api_key = os.environ.get("BULKGEN_API_KEY")
@@ -173,9 +173,10 @@ response = requests.post(
 )
 
 result = response.json()
-for i, img_b64 in enumerate(result["images"]):
+for i, img in enumerate(result["images"]):
+    img_data = requests.get(img["url"]).content
     with open(f"image_{i+1}.png", "wb") as f:
-        f.write(base64.b64decode(img_b64))
+        f.write(img_data)
 ```
 
 ## Example: cURL
@@ -193,12 +194,21 @@ curl -X POST https://bulkgen.app/api/v1/generate \
   }'
 ```
 
+Response:
+
+```json
+{
+  "expiresAt": "...",
+  "images": [{"id": "...", "filePath": "...", "url": "https://signed-url...", "expiresAt": "..."}]
+}
+```
+
 ## Error Handling
 
 | Status | Error |
 |--------|-------|
 | 401 | Invalid or missing API key |
-| 400 | Invalid parameters (check mode, layout, ratio) |
+| 400 | Invalid parameters (check mode, layout, ratio, prompts) |
 | 502 | Model failed to generate image |
 | 500 | Server error |
 
@@ -206,4 +216,4 @@ curl -X POST https://bulkgen.app/api/v1/generate \
 
 BulkGen generates a grid image then splits it server-side. You pay for ONE image regardless of cell count.
 
-Example: 9 images at 1K resolution = $0.067 (not 9 x $0.067)
+Example: 9 images at 1K resolution ≈ $0.067 (not 9 × $0.067)
