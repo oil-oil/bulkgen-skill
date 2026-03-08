@@ -1,47 +1,38 @@
-# @linzhihuang/bulkgen-skill
+# BulkGen Skill
 
-BulkGen Agent Skill for Claude Code - Generate AI images efficiently with one API call for multiple outputs.
+BulkGen skill for AI agents. Generate one or many AI images with a single request, and optionally package the result into a lightweight HTML preview page with download buttons.
 
-## Installation
+## Install
 
 ```bash
-npx skills add @linzhihuang/bulkgen-skill
+npx skills add oil-oil/bulkgen
 ```
 
 ## Setup
-
-1. Get your API key from [BulkGen](https://bulkgen.app)
-2. Set environment variable:
 
 ```bash
 export BULKGEN_API_KEY="sk_live_your_key_here"
 ```
 
-## Usage
+If the key is not configured yet, get it from `https://bulkgen.app`:
 
-Once installed, Claude will automatically use BulkGen when you request AI image generation:
+1. Log in
+2. Open the user menu
+3. Choose `API Keys`
+4. Create a new key
+5. Export it locally or paste it to the agent for the current task
 
-- "Generate 4 product hero concepts"
-- "Create a 3x3 grid of anime characters"
-- "Make variations of this logo concept"
+## What it does
 
-## Features
+- Generate single images, grids, and variation sets
+- Return signed image URLs from BulkGen
+- Build a polished HTML preview page for a generation result
+- Download expiring signed-image results to a local folder
+- Add per-image download buttons for handoff and review
 
-- **Solo Mode**: Single prompt → Single image
-- **Batch Mode**: N prompts → N distinct images
-- **Variation Mode**: 1 prompt → N creative variants
+## Skill contents
 
-## Cost Optimization
-
-BulkGen generates a grid image then splits it server-side. You pay for ONE image regardless of cell count.
-
-Example: 9 images at 1K = $0.067 (not 9 × $0.067)
-
-## Links
-
-- [BulkGen App](https://bulkgen.app)
-- [API Documentation](https://bulkgen.app → API Docs)
-
-## License
-
-MIT
+- `bulkgen/SKILL.md`: trigger + workflow instructions
+- `bulkgen/scripts/build_preview.js`: build preview HTML from generation JSON
+- `bulkgen/scripts/download_images.js`: download generated images locally from result JSON
+- `bulkgen/assets/html-preview-template/template.html`: reusable preview template
