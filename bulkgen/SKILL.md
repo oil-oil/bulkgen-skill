@@ -1,6 +1,13 @@
 ---
 name: bulkgen
-description: Bulk AI image generation via the BulkGen API, plus post-generation HTML preview packaging. Use when users ask to generate one or many AI images, create image grids, batch image generation, multiple variants, prompt-based image sets, or when the result should be delivered as a browsable HTML gallery with per-image download buttons. Triggers include: "generate images", "create AI art", "make a 3x3 grid", "generate variations", "批量生成图片", "生成宫格图", "给我一个可预览可下载的 HTML 页面".
+description: >-
+  Bulk AI image generation via the BulkGen API, plus post-generation HTML preview packaging.
+  Use when users ask to generate one or many AI images, create image grids, batch
+  image generation, multiple variants, prompt-based image sets, or when the result
+  should be delivered as a browsable HTML gallery with per-image download buttons.
+  Triggers include: "generate images", "create AI art", "make a 3x3 grid",
+  "generate variations", "批量生成图片", "生成宫格图",
+  "给我一个可预览可下载的 HTML 页面".
 ---
 
 # BulkGen Agent Skill
