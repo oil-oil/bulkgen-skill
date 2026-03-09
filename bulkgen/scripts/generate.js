@@ -33,6 +33,7 @@ const VALID_LAYOUTS = {
   12: [[4, 3], [3, 4]],
   16: [[4, 4]],
 };
+const MAX_LAYOUT_RATIO_ERROR = 0.12;
 
 function usage() {
   console.log(`
@@ -47,8 +48,8 @@ OPTIONS
   --cols <n>            Grid columns (default: auto)
   --rows <n>            Grid rows (default: auto)
   --resolution <level>  1K | 2K | 4K (default: 1K)
-  --source-ratio <ratio> Source aspect ratio (default: 1:1)
-  --output-ratio <ratio> Output tile aspect ratio (default: same as source)
+  --source-ratio <ratio> Source aspect ratio (optional, auto-picked when omitted)
+  --output-ratio <ratio> Output tile aspect ratio (default: 1:1)
   --input <path>        Reference image(s) for editing (can repeat)
   --output <path>       Output JSON file path (default: ./bulkgen-result.json)
   --api-key <key>       API key (or set BULKGEN_API_KEY env var)
@@ -84,7 +85,7 @@ function parseArgs(args) {
     cols: null,
     rows: null,
     resolution: "1K",
-    sourceRatio: "1:1",
+    sourceRatio: null,
     outputRatio: null,
     inputImages: [],
     outputPath: "./bulkgen-result.json",
@@ -166,7 +167,7 @@ function validateParams(params) {
     errors.push(`Invalid mode "${params.mode}". Use: solo, batch, or variation.`);
   }
 
-  if (!SUPPORTED_RATIOS.includes(params.sourceRatio)) {
+  if (params.sourceRatio && !SUPPORTED_RATIOS.includes(params.sourceRatio)) {
     errors.push(`Invalid source-ratio "${params.sourceRatio}". Supported: ${SUPPORTED_RATIOS.join(", ")}`);
   }
 
@@ -212,6 +213,17 @@ function validateParams(params) {
     errors.push("Batch and variation modes require at least 2 cells.");
   }
 
+  const outputRatio = params.outputRatio || params.sourceRatio || "1:1";
+  const suggestedSourceRatio = resolveSourceRatioForLayout(cols, rows, outputRatio);
+
+  if (!suggestedSourceRatio) {
+    errors.push(`Layout ${cols}x${rows} does not support output-ratio "${outputRatio}".`);
+  } else if (params.sourceRatio && !isValidRatioLayoutCombo(cols, rows, outputRatio, params.sourceRatio)) {
+    errors.push(
+      `source-ratio "${params.sourceRatio}" is not compatible with layout ${cols}x${rows} and output-ratio "${outputRatio}". Try --source-ratio ${suggestedSourceRatio}.`
+    );
+  }
+
   return { cols, rows, errors };
 }
 
@@ -224,6 +236,40 @@ function findBestLayout(count) {
   }
   return [4, 4]; // Fallback to 4x4
 }
+
+function ratioToNumber(ratio) {
+  const [widthRaw, heightRaw] = ratio.split(":");
+  const width = Number(widthRaw);
+  const height = Number(heightRaw);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 1;
+  }
+
+  return width / height;
+}
+
+function getLayoutCandidates(cols, rows, outputRatio) {
+  const canvasAspect = (cols / rows) * ratioToNumber(outputRatio);
+
+  return SUPPORTED_RATIOS.map((sourceRatio) => {
+    const sourceAspect = ratioToNumber(sourceRatio);
+    const relativeError = Math.abs(sourceAspect - canvasAspect) / canvasAspect;
+    return { sourceRatio, relativeError };
+  }).sort((left, right) => left.relativeError - right.relativeError);
+}
+
+function resolveSourceRatioForLayout(cols, rows, outputRatio) {
+  const candidate = getLayoutCandidates(cols, rows, outputRatio)[0];
+  return candidate && candidate.relativeError <= MAX_LAYOUT_RATIO_ERROR ? candidate.sourceRatio : null;
+}
+
+function isValidRatioLayoutCombo(cols, rows, outputRatio, sourceRatio) {
+  return getLayoutCandidates(cols, rows, outputRatio).some(
+    (candidate) => candidate.sourceRatio === sourceRatio && candidate.relativeError <= MAX_LAYOUT_RATIO_ERROR
+  );
+}
+
 
 function encodeImage(filePath) {
   const absolutePath = path.resolve(filePath);
@@ -254,6 +300,8 @@ function encodeImage(filePath) {
 
 async function callAPI(params, cols, rows) {
   const apiKey = params.apiKey || process.env.BULKGEN_API_KEY;
+  const outputRatio = params.outputRatio || params.sourceRatio || "1:1";
+  const sourceRatio = params.sourceRatio || resolveSourceRatioForLayout(cols, rows, outputRatio);
 
   if (!apiKey) {
     throw new Error(
@@ -270,11 +318,11 @@ async function callAPI(params, cols, rows) {
     rows,
     prompts: params.prompts,
     resolution: params.resolution,
-    sourceRatio: params.sourceRatio,
+    outputRatio,
   };
 
-  if (params.outputRatio) {
-    requestBody.outputRatio = params.outputRatio;
+  if (sourceRatio) {
+    requestBody.sourceRatio = sourceRatio;
   }
 
   if (inputImagePayloads.length > 0) {
@@ -341,7 +389,8 @@ async function main() {
       cols,
       rows,
       resolution: params.resolution,
-      aspectRatio: params.outputRatio || params.sourceRatio,
+      aspectRatio: params.outputRatio || params.sourceRatio || "1:1",
+      sourceRatio: result.sourceRatio || params.sourceRatio || resolveSourceRatioForLayout(cols, rows, params.outputRatio || params.sourceRatio || "1:1"),
       prompts: params.prompts,
     };
 

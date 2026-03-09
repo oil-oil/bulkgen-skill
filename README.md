@@ -1,6 +1,6 @@
 # BulkGen Skill
 
-BulkGen skill for AI agents. Generate one or many AI images with a single request, edit images with reference photos, and optionally package the result into a lightweight HTML preview page with download buttons.
+BulkGen skill for AI agents. Generate one or many AI images with a single request, edit images with reference photos, auto-resolve compatible grid/source ratios, and optionally package the result into a lightweight HTML preview page with download buttons.
 
 ## Install
 
@@ -26,6 +26,8 @@ If the key is not configured yet, get it from `https://bulk-gen.com`:
 
 - Generate single images, grids, and variation sets
 - Edit images with reference photos (style transfer, compositing)
+- Auto-pick a compatible source ratio when the user only cares about output ratio
+- Stop early on unsupported layout / ratio combinations instead of sending a bad request
 - Return signed image URLs from BulkGen
 - Build a polished HTML preview page for a generation result
 - Download expiring signed-image results to a local folder
@@ -34,6 +36,7 @@ If the key is not configured yet, get it from `https://bulk-gen.com`:
 ## Skill contents
 
 - `bulkgen/SKILL.md`: trigger + workflow instructions
+- `bulkgen/scripts/generate.js`: generate images with layout / ratio validation
 - `bulkgen/scripts/build_preview.js`: build preview HTML from generation JSON
 - `bulkgen/scripts/download_images.js`: download generated images locally from result JSON
 - `bulkgen/assets/html-preview-template/template.html`: reusable preview template
