@@ -1,6 +1,6 @@
 # BulkGen Skill
 
-BulkGen skill for AI agents. Generate one or many AI images with a single request, and optionally package the result into a lightweight HTML preview page with download buttons.
+BulkGen skill for AI agents. Generate one or many AI images with a single request, edit images with reference photos, and optionally package the result into a lightweight HTML preview page with download buttons.
 
 ## Install
 
@@ -14,7 +14,7 @@ npx skills add oil-oil/bulkgen
 export BULKGEN_API_KEY="sk_live_your_key_here"
 ```
 
-If the key is not configured yet, get it from `https://bulkgen.app`:
+If the key is not configured yet, get it from `https://bulk-gen.com`:
 
 1. Log in
 2. Open the user menu
@@ -25,6 +25,7 @@ If the key is not configured yet, get it from `https://bulkgen.app`:
 ## What it does
 
 - Generate single images, grids, and variation sets
+- Edit images with reference photos (style transfer, compositing)
 - Return signed image URLs from BulkGen
 - Build a polished HTML preview page for a generation result
 - Download expiring signed-image results to a local folder
