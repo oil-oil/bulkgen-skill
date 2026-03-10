@@ -33,7 +33,12 @@ const VALID_LAYOUTS = {
   12: [[4, 3], [3, 4]],
   16: [[4, 4]],
 };
-const MAX_LAYOUT_RATIO_ERROR = 0.12;
+
+const MAX_SOURCE_RATIO_ERROR = 0.12;
+const ASPECT_EPSILON = 0.0001;
+const SUPPORTED_ASPECT_VALUES = SUPPORTED_RATIOS.map(ratioToNumber);
+const MIN_SUPPORTED_TILE_ASPECT = Math.min(...SUPPORTED_ASPECT_VALUES);
+const MAX_SUPPORTED_TILE_ASPECT = Math.max(...SUPPORTED_ASPECT_VALUES);
 
 function usage() {
   console.log(`
@@ -43,32 +48,32 @@ USAGE
   node generate.js [options]
 
 OPTIONS
-  --prompts <text>      One or more prompts (required, can repeat)
-  --mode <type>         solo | batch | variation (default: batch)
-  --cols <n>            Grid columns (default: auto)
-  --rows <n>            Grid rows (default: auto)
-  --resolution <level>  1K | 2K | 4K (default: 1K)
-  --source-ratio <ratio> Source aspect ratio (optional, auto-picked when omitted)
-  --output-ratio <ratio> Output tile aspect ratio (default: 1:1)
-  --input <path>        Reference image(s) for editing (can repeat)
-  --output <path>       Output JSON file path (default: ./bulkgen-result.json)
-  --api-key <key>       API key (or set BULKGEN_API_KEY env var)
-  --help                Show this help
+  --prompts <text>       One or more prompts (required, can repeat)
+  --mode <type>          solo | batch | variation (default: batch)
+  --cols <n>             Grid columns (default: auto)
+  --rows <n>             Grid rows (default: auto)
+  --resolution <level>   1K | 2K | 4K (default: 1K)
+  --canvas-ratio <ratio> Full output canvas aspect ratio (default: 1:1)
+  --source-ratio <ratio> Optional source aspect ratio override
+  --input <path>         Reference image(s) for editing (can repeat)
+  --output <path>        Output JSON file path (default: ./bulkgen-result.json)
+  --api-key <key>        API key (or set BULKGEN_API_KEY env var)
+  --help                 Show this help
 
 MODES
-  solo      One prompt → one image (1x1 only)
-  batch     Multiple prompts → multiple distinct images
-  variation One prompt → multiple creative variants
+  solo       One prompt → one image (1x1 only)
+  batch      Multiple prompts → multiple distinct images
+  variation  One prompt → multiple creative variants
 
 EXAMPLES
   # Single image
-  node generate.js --prompts "a sunset over mountains"
+  node generate.js --prompts "a sunset over mountains" --mode solo
 
-  # 2x2 batch
-  node generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
+  # 2x2 batch on a square canvas
+  node generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2 --canvas-ratio 1:1
 
-  # 3x3 variations
-  node generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3
+  # 3x3 variations on a portrait canvas
+  node generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 4:5
 
   # Edit image with reference
   node generate.js --prompts "make it watercolor style" --input ./photo.jpg
@@ -85,8 +90,8 @@ function parseArgs(args) {
     cols: null,
     rows: null,
     resolution: "1K",
+    canvasRatio: null,
     sourceRatio: null,
-    outputRatio: null,
     inputImages: [],
     outputPath: "./bulkgen-result.json",
     apiKey: null,
@@ -127,13 +132,13 @@ function parseArgs(args) {
       continue;
     }
 
-    if (arg === "--source-ratio") {
-      result.sourceRatio = args[++i];
+    if (arg === "--canvas-ratio") {
+      result.canvasRatio = args[++i];
       continue;
     }
 
-    if (arg === "--output-ratio") {
-      result.outputRatio = args[++i];
+    if (arg === "--source-ratio") {
+      result.sourceRatio = args[++i];
       continue;
     }
 
@@ -160,81 +165,93 @@ function validateParams(params) {
   const errors = [];
 
   if (params.prompts.length === 0) {
-    errors.push("At least one --prompts is required.");
+    errors.push("At least one --prompts value is required.");
   }
 
   if (!["solo", "batch", "variation"].includes(params.mode)) {
     errors.push(`Invalid mode "${params.mode}". Use: solo, batch, or variation.`);
   }
 
-  if (params.sourceRatio && !SUPPORTED_RATIOS.includes(params.sourceRatio)) {
-    errors.push(`Invalid source-ratio "${params.sourceRatio}". Supported: ${SUPPORTED_RATIOS.join(", ")}`);
+  if (params.canvasRatio && !SUPPORTED_RATIOS.includes(params.canvasRatio)) {
+    errors.push(`Invalid canvas-ratio "${params.canvasRatio}". Supported: ${SUPPORTED_RATIOS.join(", ")}`);
   }
 
-  if (params.outputRatio && !SUPPORTED_RATIOS.includes(params.outputRatio)) {
-    errors.push(`Invalid output-ratio "${params.outputRatio}". Supported: ${SUPPORTED_RATIOS.join(", ")}`);
+  if (params.sourceRatio && !SUPPORTED_RATIOS.includes(params.sourceRatio)) {
+    errors.push(`Invalid source-ratio "${params.sourceRatio}". Supported: ${SUPPORTED_RATIOS.join(", ")}`);
   }
 
   if (!["1K", "2K", "4K"].includes(params.resolution)) {
     errors.push(`Invalid resolution "${params.resolution}". Use: 1K, 2K, or 4K.`);
   }
 
-  // Determine cols/rows
   let cols = params.cols;
   let rows = params.rows;
+  const requestedCanvasRatio = params.canvasRatio || "1:1";
 
   if (params.mode === "solo") {
     cols = 1;
     rows = 1;
   } else if (!cols || !rows) {
-    // Auto-determine based on prompt count
-    const count = params.mode === "variation" ? 4 : params.prompts.length;
-    const layout = findBestLayout(count);
-    cols = layout[0];
-    rows = layout[1];
+    const desiredCount = params.mode === "variation" ? 4 : params.prompts.length;
+    [cols, rows] = findBestLayout(desiredCount, requestedCanvasRatio);
   }
 
-  // Validate layout
   const cellCount = cols * rows;
   const validLayout = VALID_LAYOUTS[cellCount]?.some(([c, r]) => c === cols && r === rows);
 
   if (!validLayout) {
     const options = Object.entries(VALID_LAYOUTS)
-      .map(([n, layouts]) => layouts.map(([c, r]) => `${c}x${r}`).join(", "))
+      .map(([, layouts]) => layouts.map(([c, r]) => `${c}x${r}`).join(", "))
       .join("; ");
     errors.push(`Invalid layout ${cols}x${rows}. Valid options: ${options}`);
   }
 
   if (params.mode === "solo" && cellCount !== 1) {
-    errors.push("Solo mode requires 1x1 layout.");
+    errors.push("Solo mode requires a 1x1 layout.");
   }
 
   if (params.mode !== "solo" && cellCount < 2) {
     errors.push("Batch and variation modes require at least 2 cells.");
   }
 
-  const outputRatio = params.outputRatio || params.sourceRatio || "1:1";
-  const suggestedSourceRatio = resolveSourceRatioForLayout(cols, rows, outputRatio);
+  const suggestedSourceRatio = resolveSourceRatioForLayout(cols, rows, requestedCanvasRatio);
 
   if (!suggestedSourceRatio) {
-    errors.push(`Layout ${cols}x${rows} does not support output-ratio "${outputRatio}".`);
-  } else if (params.sourceRatio && !isValidRatioLayoutCombo(cols, rows, outputRatio, params.sourceRatio)) {
+    errors.push(`Layout ${cols}x${rows} does not support canvas-ratio "${requestedCanvasRatio}".`);
+  } else if (params.sourceRatio && !isValidRatioLayoutCombo(cols, rows, requestedCanvasRatio, params.sourceRatio)) {
     errors.push(
-      `source-ratio "${params.sourceRatio}" is not compatible with layout ${cols}x${rows} and output-ratio "${outputRatio}". Try --source-ratio ${suggestedSourceRatio}.`
+      `source-ratio "${params.sourceRatio}" is not compatible with layout ${cols}x${rows} and canvas-ratio "${requestedCanvasRatio}". Try --source-ratio ${suggestedSourceRatio}.`
     );
   }
 
-  return { cols, rows, errors };
+  return {
+    cols,
+    rows,
+    canvasRatio: requestedCanvasRatio,
+    sourceRatio: params.sourceRatio || suggestedSourceRatio,
+    tileRatio: getTileRatioForCanvasLayout(cols, rows, requestedCanvasRatio),
+    errors,
+  };
 }
 
-function findBestLayout(count) {
-  // Find the smallest valid layout that fits the count
-  for (const [n, layouts] of Object.entries(VALID_LAYOUTS)) {
-    if (parseInt(n) >= count) {
-      return layouts[0];
+function findBestLayout(count, canvasRatio) {
+  const cellCounts = Object.keys(VALID_LAYOUTS)
+    .map((value) => parseInt(value, 10))
+    .sort((left, right) => left - right);
+
+  for (const cellCount of cellCounts) {
+    if (cellCount < count) continue;
+    const layouts = getSortedLayoutCandidates(VALID_LAYOUTS[cellCount], canvasRatio);
+    const valid = layouts.find((candidate) => isValidLayoutCandidate(candidate));
+    if (valid) {
+      return [valid.cols, valid.rows];
+    }
+    if (layouts[0]) {
+      return [layouts[0].cols, layouts[0].rows];
     }
   }
-  return [4, 4]; // Fallback to 4x4
+
+  return [4, 4];
 }
 
 function ratioToNumber(ratio) {
@@ -249,27 +266,101 @@ function ratioToNumber(ratio) {
   return width / height;
 }
 
-function getLayoutCandidates(cols, rows, outputRatio) {
-  const canvasAspect = (cols / rows) * ratioToNumber(outputRatio);
-
-  return SUPPORTED_RATIOS.map((sourceRatio) => {
-    const sourceAspect = ratioToNumber(sourceRatio);
-    const relativeError = Math.abs(sourceAspect - canvasAspect) / canvasAspect;
-    return { sourceRatio, relativeError };
-  }).sort((left, right) => left.relativeError - right.relativeError);
+function getAspectOrientation(aspect) {
+  if (Math.abs(aspect - 1) < ASPECT_EPSILON) return "square";
+  return aspect > 1 ? "landscape" : "portrait";
 }
 
-function resolveSourceRatioForLayout(cols, rows, outputRatio) {
-  const candidate = getLayoutCandidates(cols, rows, outputRatio)[0];
-  return candidate && candidate.relativeError <= MAX_LAYOUT_RATIO_ERROR ? candidate.sourceRatio : null;
+function isTileOrientationCompatible(canvasAspect, tileAspect) {
+  const canvasOrientation = getAspectOrientation(canvasAspect);
+  if (canvasOrientation === "square") return true;
+  return getAspectOrientation(tileAspect) === canvasOrientation;
 }
 
-function isValidRatioLayoutCombo(cols, rows, outputRatio, sourceRatio) {
-  return getLayoutCandidates(cols, rows, outputRatio).some(
-    (candidate) => candidate.sourceRatio === sourceRatio && candidate.relativeError <= MAX_LAYOUT_RATIO_ERROR
+function isTileAspectWithinSupportedRange(tileAspect) {
+  return tileAspect >= MIN_SUPPORTED_TILE_ASPECT - ASPECT_EPSILON && tileAspect <= MAX_SUPPORTED_TILE_ASPECT + ASPECT_EPSILON;
+}
+
+function getClosestModelRatio(aspect) {
+  return SUPPORTED_RATIOS.reduce((best, current) => {
+    const bestDelta = Math.abs(ratioToNumber(best) - aspect);
+    const currentDelta = Math.abs(ratioToNumber(current) - aspect);
+    return currentDelta < bestDelta ? current : best;
+  });
+}
+
+function buildLayoutCandidate(cols, rows, canvasRatio, sourceRatio) {
+  const canvasAspect = ratioToNumber(canvasRatio);
+  const tileAspect = (canvasAspect * rows) / cols;
+  const resolvedSourceRatio = sourceRatio || getClosestModelRatio(canvasAspect);
+  const sourceAspect = ratioToNumber(resolvedSourceRatio);
+
+  return {
+    cols,
+    rows,
+    sourceRatio: resolvedSourceRatio,
+    canvasAspect,
+    tileAspect,
+    sourceAspectError: Math.abs(sourceAspect - canvasAspect) / canvasAspect,
+    tileWithinSupportedRange: isTileAspectWithinSupportedRange(tileAspect),
+    tileOrientationCompatible: isTileOrientationCompatible(canvasAspect, tileAspect),
+  };
+}
+
+function isValidLayoutCandidate(candidate) {
+  return (
+    candidate.sourceAspectError <= MAX_SOURCE_RATIO_ERROR &&
+    candidate.tileWithinSupportedRange &&
+    candidate.tileOrientationCompatible
   );
 }
 
+function getCandidateScore(candidate) {
+  const orientationPenalty = candidate.tileOrientationCompatible ? 0 : 100;
+  const rangePenalty = candidate.tileWithinSupportedRange
+    ? 0
+    : candidate.tileAspect < MIN_SUPPORTED_TILE_ASPECT
+      ? MIN_SUPPORTED_TILE_ASPECT - candidate.tileAspect
+      : candidate.tileAspect - MAX_SUPPORTED_TILE_ASPECT;
+
+  return orientationPenalty + rangePenalty + candidate.sourceAspectError;
+}
+
+function getSortedLayoutCandidates(layouts, canvasRatio) {
+  return layouts
+    .map(([cols, rows]) => buildLayoutCandidate(cols, rows, canvasRatio))
+    .sort((left, right) => getCandidateScore(left) - getCandidateScore(right));
+}
+
+function resolveSourceRatioForLayout(cols, rows, canvasRatio) {
+  const candidate = buildLayoutCandidate(cols, rows, canvasRatio);
+  return isValidLayoutCandidate(candidate) ? candidate.sourceRatio : null;
+}
+
+function isValidRatioLayoutCombo(cols, rows, canvasRatio, sourceRatio) {
+  return isValidLayoutCandidate(buildLayoutCandidate(cols, rows, canvasRatio, sourceRatio));
+}
+
+function getTileAspectForCanvasLayout(cols, rows, canvasRatio) {
+  return (ratioToNumber(canvasRatio) * rows) / cols;
+}
+
+function aspectToRatioString(aspect) {
+  if (!Number.isFinite(aspect) || aspect <= 0) return "1:1";
+
+  const scale = 1000;
+  let width = Math.max(1, Math.round(aspect * scale));
+  let height = scale;
+  const gcd = (left, right) => (right === 0 ? left : gcd(right, left % right));
+  const divisor = gcd(width, height);
+  width /= divisor;
+  height /= divisor;
+  return `${width}:${height}`;
+}
+
+function getTileRatioForCanvasLayout(cols, rows, canvasRatio) {
+  return aspectToRatioString(getTileAspectForCanvasLayout(cols, rows, canvasRatio));
+}
 
 function encodeImage(filePath) {
   const absolutePath = path.resolve(filePath);
@@ -298,10 +389,8 @@ function encodeImage(filePath) {
   return { mimeType, dataBase64: base64 };
 }
 
-async function callAPI(params, cols, rows) {
+async function callAPI(params, prepared) {
   const apiKey = params.apiKey || process.env.BULKGEN_API_KEY;
-  const outputRatio = params.outputRatio || params.sourceRatio || "1:1";
-  const sourceRatio = params.sourceRatio || resolveSourceRatioForLayout(cols, rows, outputRatio);
 
   if (!apiKey) {
     throw new Error(
@@ -314,22 +403,24 @@ async function callAPI(params, cols, rows) {
 
   const requestBody = {
     mode: params.mode,
-    cols,
-    rows,
+    cols: prepared.cols,
+    rows: prepared.rows,
     prompts: params.prompts,
     resolution: params.resolution,
-    outputRatio,
+    canvasRatio: prepared.canvasRatio,
   };
 
-  if (sourceRatio) {
-    requestBody.sourceRatio = sourceRatio;
+  if (prepared.sourceRatio) {
+    requestBody.sourceRatio = prepared.sourceRatio;
   }
 
   if (inputImagePayloads.length > 0) {
     requestBody.inputImages = inputImagePayloads;
   }
 
-  console.error(`Calling BulkGen API (${params.mode}, ${cols}x${rows}, ${params.resolution})...`);
+  console.error(
+    `Calling BulkGen API (${params.mode}, ${prepared.cols}x${prepared.rows}, canvas ${prepared.canvasRatio}, ${params.resolution})...`
+  );
 
   const response = await fetch("https://bulk-gen.com/api/v1/generate", {
     method: "POST",
@@ -346,14 +437,13 @@ async function callAPI(params, cols, rows) {
     const errorMessage = result.error || `API error: ${response.status}`;
 
     if (response.status === 401) {
-      throw new Error(`Invalid API key. Get a new key at https://bulk-gen.com`);
+      throw new Error("Invalid API key. Get a new key at https://bulk-gen.com");
     }
 
     if (response.status === 402) {
       const credits = result.credits || {};
       throw new Error(
-        `Insufficient credits. Remaining: ${credits.remaining || 0}, Required: ${credits.required || "?"}. ` +
-          `Top up at https://bulk-gen.com`
+        `Insufficient credits. Remaining: ${credits.remaining || 0}, Required: ${credits.required || "?"}. Top up at https://bulk-gen.com`
       );
     }
 
@@ -372,31 +462,33 @@ async function main() {
   }
 
   const params = parseArgs(args);
-  const { cols, rows, errors } = validateParams(params);
+  const prepared = validateParams(params);
 
-  if (errors.length > 0) {
-    console.error("Errors:\n" + errors.map((e) => `  - ${e}`).join("\n"));
+  if (prepared.errors.length > 0) {
+    console.error("Errors:\n" + prepared.errors.map((error) => `  - ${error}`).join("\n"));
     process.exit(1);
   }
 
   try {
-    const result = await callAPI(params, cols, rows);
-
-    // Add metadata for preview generation
+    const result = await callAPI(params, prepared);
     const output = {
       ...result,
       mode: params.mode,
-      cols,
-      rows,
+      cols: prepared.cols,
+      rows: prepared.rows,
       resolution: params.resolution,
-      aspectRatio: params.outputRatio || params.sourceRatio || "1:1",
-      sourceRatio: result.sourceRatio || params.sourceRatio || resolveSourceRatioForLayout(cols, rows, params.outputRatio || params.sourceRatio || "1:1"),
+      aspectRatio: prepared.canvasRatio,
+      canvasRatio: result.canvasRatio || prepared.canvasRatio,
+      sourceRatio: result.sourceRatio || prepared.sourceRatio,
+      tileRatio: result.tileRatio || prepared.tileRatio,
       prompts: params.prompts,
     };
 
     fs.writeFileSync(params.outputPath, JSON.stringify(output, null, 2));
 
     console.error(`\nGenerated ${result.images.length} image(s)`);
+    console.error(`Canvas ratio: ${output.canvasRatio}`);
+    console.error(`Tile ratio: ${output.tileRatio}`);
     console.error(`Credits charged: ${result.credits?.charged || "?"}`);
     console.error(`Credits remaining: ${result.credits?.remaining ?? "?"}`);
     console.error(`\nResult saved to: ${params.outputPath}`);
