@@ -42,11 +42,6 @@ function normalizeImage(image, index) {
   };
 }
 
-function buildDownloadAllButton(downloadAllUrl) {
-  if (!downloadAllUrl) return "";
-  return `<a class="btn" href="${escapeHtml(downloadAllUrl)}" download>Download all</a>`;
-}
-
 function buildGridItems(images) {
   return images
     .map(
@@ -64,32 +59,36 @@ function buildGridItems(images) {
     .join("\n");
 }
 
-function buildDownloadItems(images) {
-  return images
-    .map(
-      (image, index) => `
-        <article class="download-item">
-          <div class="download-item-head">
-            <strong>Image ${index + 1}</strong>
-            <a class="download-link" href="${escapeHtml(image.url)}" download>Download</a>
-          </div>
-          <span>${escapeHtml(image.filePath || image.id)}</span>
-        </article>`,
-    )
-    .join("\n");
+function buildOriginalGridSection(gridUrl) {
+  if (!gridUrl) return "";
+  return `
+      <section class="original-panel">
+        <p class="panel-title">Original grid (uncropped)</p>
+        <img class="original-img" src="${escapeHtml(gridUrl)}" alt="Original grid image" loading="lazy" />
+      </section>`;
 }
 
-function buildPromptItems(images, prompts) {
-  return images
-    .map((image, index) => {
-      const prompt = normalizePrompt(prompts, index) || "No prompt provided.";
+function buildPromptsSection(images, prompts) {
+  if (!Array.isArray(prompts) || prompts.length === 0) return "";
+  const items = images
+    .map((_, index) => {
+      const prompt = normalizePrompt(prompts, index);
+      if (!prompt) return "";
       return `
-        <article class="prompt-item">
-          <strong>Image ${index + 1}</strong>
-          <span>${escapeHtml(prompt)}</span>
-        </article>`;
+          <div class="prompt-item">
+            <span class="prompt-num">#${index + 1}</span>
+            <span class="prompt-text">${escapeHtml(prompt)}</span>
+          </div>`;
     })
+    .filter(Boolean)
     .join("\n");
+  if (!items) return "";
+  return `
+      <section class="prompts-panel">
+        <p class="panel-title">Prompts</p>
+        <div class="prompt-list">${items}
+        </div>
+      </section>`;
 }
 
 function replaceAll(template, replacements) {
@@ -129,6 +128,8 @@ function main() {
   const templatePath = path.join(__dirname, "..", "assets", "html-preview-template", "template.html");
   const template = fs.readFileSync(templatePath, "utf8");
 
+  const gridUrl = typeof input.gridUrl === "string" && input.gridUrl ? input.gridUrl : "";
+
   const html = replaceAll(template, {
     TITLE: escapeHtml(title),
     SUBTITLE: escapeHtml(subtitle),
@@ -138,10 +139,9 @@ function main() {
     IMAGE_COUNT: String(images.length),
     RESOLUTION: escapeHtml(resolution),
     ASPECT_RATIO: aspectRatio,
-    DOWNLOAD_ALL_BUTTON: buildDownloadAllButton(typeof input.downloadAllUrl === "string" ? input.downloadAllUrl : ""),
     GRID_ITEMS: buildGridItems(images),
-    DOWNLOAD_ITEMS: buildDownloadItems(images),
-    PROMPT_ITEMS: buildPromptItems(images, input.prompts),
+    ORIGINAL_GRID_SECTION: buildOriginalGridSection(gridUrl),
+    PROMPTS_SECTION: buildPromptsSection(images, input.prompts),
   });
 
   fs.writeFileSync(outputPath, html);
