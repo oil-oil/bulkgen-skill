@@ -422,7 +422,7 @@ async function callAPI(params, prepared) {
     `Calling BulkGen API (${params.mode}, ${prepared.cols}x${prepared.rows}, canvas ${prepared.canvasRatio}, ${params.resolution})...`
   );
 
-  const response = await fetch("https://bulk-gen.com/api/v1/generate", {
+  const response = await fetch("https://api.bulk-gen.com/api/v1/generate", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

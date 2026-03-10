@@ -47,6 +47,82 @@ node scripts/generate.js --prompts "make it watercolor style" --input ./photo.jp
 
 ---
 
+## Before generating: clarify parameters
+
+**Always confirm ambiguous parameters before running generate.js.** Do not assume defaults silently.
+
+### When to ask
+
+| User says | Need to ask? | Reason |
+|-----------|--------------|--------|
+| "生成一张猫的图" | No | Solo mode is clear |
+| "生成 9 张图" | **Yes: ratio + mode** | Both are ambiguous |
+| "做个九宫格变体" | **Yes: ratio** | Mode is clear (variation), ratio is not |
+| "生成 4 张不同产品图" | **Yes: ratio** | Mode is batch, ratio is not |
+| "生成 16 张 4K 横屏海报" | No | All parameters specified |
+
+### Infer from use case
+
+When user mentions a specific use case, infer the ratio:
+
+| Use case / Platform | Suggested ratio | Notes |
+|---------------------|-----------------|-------|
+| 手机壁纸 / Phone wallpaper | 9:16 | Portrait, full screen |
+| 小红书封面 / Xiaohongshu cover | 3:4 | Portrait, slightly wider |
+| 公众号封面 / WeChat cover | 2.35:1 or 16:9 | Wide banner |
+| 抖音封面 / Douyin cover | 9:16 | Same as phone wallpaper |
+| 电商主图 / E-commerce | 1:1 | Square, platform standard |
+| 海报 / Poster | 3:4 or 2:3 | Portrait poster |
+| 横屏 / Landscape / 宽屏 | 16:9 | Standard widescreen |
+| 社交媒体 / Social media | 1:1 or 4:5 | Instagram-style |
+| Presentation / PPT | 16:9 | Slide format |
+
+If you infer a ratio, briefly confirm: *"我会用 9:16 竖屏比例生成，对吗？"*
+
+### How to ask (with explanations)
+
+When asking, explain the options so the user can make an informed choice.
+
+**Example 1: User says "生成 9 张图"**
+
+> 我准备生成 9 张图片，有两个参数需要确认：
+>
+> 1. **图片比例**：
+>    - 方形 (1:1) — 适合电商主图、社交媒体
+>    - 竖屏 (9:16) — 适合手机壁纸、小红书、抖音
+>    - 横屏 (16:9) — 适合海报、PPT、视频封面
+>
+> 2. **生成模式**：
+>    - **变体 (variation)** — 同一个主题，9 张风格各异的变体
+>    - **批量 (batch)** — 你提供 9 个不同的提示词，每张图内容独立
+>
+> 你想要哪种？
+
+**Example 2: User says "做个九宫格变体，主题是赛博朋克城市"**
+
+> 比例确认一下：
+> - 方形 (1:1) — 适合电商主图、社交媒体
+> - 竖屏 (9:16) — 适合手机壁纸、小红书
+> - 横屏 (16:9) — 适合海报、视频
+>
+> 赛博朋克城市用哪种？
+
+**Example 3: User says "随便" or "都行"**
+
+Pick sensible defaults and confirm briefly:
+
+> 好，我用方形 (1:1) + 变体模式 (variation) 生成 9 张，开始？
+
+### Mode explanation cheat sheet
+
+When explaining modes to users:
+
+- **solo** = 一张图
+- **batch** = 多张不同内容的图（每张有独立的提示词）
+- **variation** = 同一主题的多种风格变体（AI 自动创造差异）
+
+---
+
 ## Generation modes
 
 | Mode | Use case | Prompts needed | Output |
@@ -242,7 +318,7 @@ open ./my-preview.html
 
 ## Workflow summary
 
-1. **Parse user intent** → Determine mode, layout, prompts, canvas ratio, and whether reference images are needed
-2. **Run `generate.js`** with appropriate options → Saves result JSON
+1. **Clarify parameters** → If mode or ratio is ambiguous, ask the user (see "Before generating" section)
+2. **Run `generate.js`** with confirmed options → Saves result JSON
 3. **If user needs permanent copies** → Run `download_images.js` before URLs expire
 4. **If user needs a shareable preview** → Run `build_preview.js`

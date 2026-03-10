@@ -5,8 +5,12 @@ BulkGen skill for AI agents. Generate one or many AI images with a single reques
 ## Install
 
 ```bash
-npx skills add oil-oil/bulkgen
+npx skills add oil-oil/bulkgen-skill
 ```
+
+## Install note
+
+The GitHub repository is `oil-oil/bulkgen-skill`, while the installed skill name remains `bulkgen` because the actual skill folder is `bulkgen/` and its frontmatter uses `name: bulkgen`.
 
 ## Setup
 
