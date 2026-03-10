@@ -11,7 +11,7 @@ description: >-
 
 # BulkGen Agent Skill
 
-Generate AI images with BulkGen. Use the bundled scripts for API calls, downloads, and HTML previews.
+Generate AI images with BulkGen. Scripts are bundled with this skill at `~/.claude/skills/bulkgen/scripts/` — always use this full path when running them.
 
 ## Setup
 
@@ -23,13 +23,21 @@ If missing, tell user to get one at https://bulk-gen.com → user menu → API K
 
 ---
 
+## Workflow
+
+1. **Clarify** → If ambiguous, ask ratio + mode (see below)
+2. **Generate** → Run `generate.js`, outputs `bulkgen-result.json`
+3. **Preview** → Always run `build_preview.js` and `open` the HTML file so the user can see results immediately
+
+---
+
 ## Before generating: clarify parameters
 
-When parameters are ambiguous, ask before generating.
+When the user asks for multiple images but hasn't specified ratio or mode, ask before generating.
 
-**Ask when**: User says "生成 N 张图" without specifying ratio or mode.
+**Ask when**: User asks for N images (e.g. "generate 9 images", "生成 9 张图") without specifying ratio or mode.
 
-**Skip asking when**: Solo mode, or user specified all parameters.
+**Skip asking when**: Single image (solo), or user already specified all parameters.
 
 **When asking, explain the options**:
 
@@ -40,24 +48,29 @@ When parameters are ambiguous, ask before generating.
 >
 > 你想要哪种？
 
-If user says "随便" or "都行" → use defaults (1:1 + variation), confirm briefly.
+If user says "随便", "都行", or "up to you" → use defaults (1:1 + variation), confirm briefly.
 
 ---
 
 ## Quick start
 
 ```bash
+SCRIPTS=~/.claude/skills/bulkgen/scripts
+
 # Single image
-node scripts/generate.js --prompts "a sunset" --mode solo
+node $SCRIPTS/generate.js --prompts "a sunset" --mode solo
 
 # 3x3 variations (same prompt, different styles)
-node scripts/generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 4:5
+node $SCRIPTS/generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 4:5
 
 # 2x2 batch (different prompts per cell)
-node scripts/generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
+node $SCRIPTS/generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
 
 # Edit with reference image
-node scripts/generate.js --prompts "watercolor style" --input ./photo.jpg
+node $SCRIPTS/generate.js --prompts "watercolor style" --input ./photo.jpg
+
+# Build preview and open immediately (always do this after generating)
+node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && open ./bulkgen-preview.html
 ```
 
 ---
@@ -66,7 +79,7 @@ node scripts/generate.js --prompts "watercolor style" --input ./photo.jpg
 
 | Option | Values | Default |
 |--------|--------|---------|
-| `--mode` | solo, batch, variation | batch |
+| `--mode` | solo, batch, variation | variation |
 | `--cols`, `--rows` | Grid dimensions | auto |
 | `--canvas-ratio` | 1:1, 16:9, 9:16, 4:5, 3:4, 3:2, 2:3, 4:3, 5:4, 21:9 | 1:1 |
 | `--resolution` | 1K, 2K, 4K | 1K |
@@ -79,8 +92,8 @@ node scripts/generate.js --prompts "watercolor style" --input ./photo.jpg
 | Mode | Use when |
 |------|----------|
 | `solo` | Single image |
-| `batch` | Different prompts → different images |
-| `variation` | One prompt → creative variants (same subject, different styles) |
+| `variation` | One prompt → multiple creative variants (same subject, different styles) |
+| `batch` | Different prompts → each cell gets its own independent scene |
 
 ---
 
@@ -102,14 +115,16 @@ Use `--input` for style transfer or editing. Up to 14 images, 7 MB each. Formats
 
 ## Post-generation
 
-Image URLs expire (12 hours). Download if you need permanent copies:
+`generate.js` saves results to `bulkgen-result.json`. Image URLs expire in 12 hours — always build the preview immediately so the user can view and download while URLs are still valid.
 
 ```bash
-# Download all images
-node scripts/download_images.js ./bulkgen-result.json ./downloads
+SCRIPTS=~/.claude/skills/bulkgen/scripts
 
-# Build shareable HTML preview
-node scripts/build_preview.js ./bulkgen-result.json ./preview.html
+# Build HTML preview (default: always run this)
+node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && open ./bulkgen-preview.html
+
+# Download permanent local copies (only if user explicitly asks)
+node $SCRIPTS/download_images.js ./bulkgen-result.json ./downloads
 ```
 
 ---
@@ -122,11 +137,3 @@ node scripts/build_preview.js ./bulkgen-result.json ./preview.html
 | 402 | Insufficient credits → top up |
 | 400 | Invalid params → check layout/ratio compatibility |
 | 500 | Server error → retry |
-
----
-
-## Workflow
-
-1. **Clarify** → If ambiguous, ask ratio + mode
-2. **Generate** → Run `generate.js`
-3. **Download/Preview** → If user needs permanent copies or shareable preview
