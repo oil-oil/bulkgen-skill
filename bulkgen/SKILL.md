@@ -11,44 +11,49 @@ description: >-
 
 # BulkGen Agent Skill
 
-Generate AI images with BulkGen. Scripts are bundled with this skill at `~/.claude/skills/bulkgen/scripts/` — always use this full path when running them.
+Generate AI images with BulkGen. Scripts are bundled at `~/.claude/skills/bulkgen/scripts/` — always use this full path.
 
-## Setup
+**Language**: Always respond in the user's language. This skill is written in English for consistency, but all replies to the user should match their language.
+
+---
+
+## API Key
+
+No environment variable setup needed. When the user asks to generate images:
+
+1. Check if `BULKGEN_API_KEY` is already set in the environment.
+2. If **not set**, ask the user in their language to share their key (format: `sk_live_...`). They can get one at bulk-gen.com → user menu → API Keys.
+3. Once received, pass it inline — do not `export` it or persist it anywhere:
 
 ```bash
-export BULKGEN_API_KEY="sk_live_your_key_here"
+BULKGEN_API_KEY="sk_live_..." node $SCRIPTS/generate.js ...
 ```
 
-If missing, tell user to get one at https://bulk-gen.com → user menu → API Keys.
+If the user gets a 401 error, ask them to check their key or get a new one at bulk-gen.com.
 
 ---
 
 ## Workflow
 
-1. **Clarify** → If ambiguous, ask ratio + mode (see below)
-2. **Generate** → Run `generate.js`, outputs `bulkgen-result.json`
-3. **Preview** → Always run `build_preview.js` and `open` the HTML file so the user can see results immediately
+1. **Clarify** → If parameters are ambiguous, ask ratio + mode before generating
+2. **Generate** → Run `generate.js` with the user's key inline
+3. **Preview** → Always run `build_preview.js` and `open` the HTML immediately after
 
 ---
 
 ## Before generating: clarify parameters
 
-When the user asks for multiple images but hasn't specified ratio or mode, ask before generating.
+When the user asks for multiple images without specifying ratio or mode, ask before generating.
 
-**Ask when**: User asks for N images (e.g. "generate 9 images", "生成 9 张图") without specifying ratio or mode.
+**Ask when**: User requests N images without specifying ratio or mode.
 
-**Skip asking when**: Single image (solo), or user already specified all parameters.
+**Skip asking when**: Single image (solo mode), or all parameters already specified.
 
-**When asking, explain the options**:
+**When asking**, explain the two choices in the user's language:
+- **Ratio**: square (1:1), portrait (9:16), landscape (16:9) — default square
+- **Mode**: variation (one prompt, multiple styles) vs batch (different prompt per cell) — default variation
 
-> 我准备生成 9 张图片，有两个参数需要确认：
->
-> 1. **比例**：方形(1:1)、竖屏(9:16)、横屏(16:9) — 默认方形
-> 2. **模式**：变体(同一主题多风格) vs 批量(不同提示词各自独立) — 默认变体
->
-> 你想要哪种？
-
-If user says "随便", "都行", or "up to you" → use defaults (1:1 + variation), confirm briefly.
+If the user says they don't mind or leaves it to you, use defaults (1:1 + variation) and confirm briefly.
 
 ---
 
@@ -56,20 +61,21 @@ If user says "随便", "都行", or "up to you" → use defaults (1:1 + variatio
 
 ```bash
 SCRIPTS=~/.claude/skills/bulkgen/scripts
+KEY="sk_live_..."   # key provided by the user
 
 # Single image
-node $SCRIPTS/generate.js --prompts "a sunset" --mode solo
+BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "a sunset" --mode solo
 
 # 3x3 variations (same prompt, different styles)
-node $SCRIPTS/generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 4:5
+BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 1:1
 
 # 2x2 batch (different prompts per cell)
-node $SCRIPTS/generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
+BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
 
 # Edit with reference image
-node $SCRIPTS/generate.js --prompts "watercolor style" --input ./photo.jpg
+BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "watercolor style" --input ./photo.jpg
 
-# Build preview and open immediately (always do this after generating)
+# Build preview and open (always do this after generating)
 node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && open ./bulkgen-preview.html
 ```
 
@@ -101,9 +107,7 @@ node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && o
 
 Valid: `1x1, 2x1, 1x2, 3x1, 1x3, 2x2, 3x2, 2x3, 4x2, 2x4, 3x3, 4x3, 3x4, 4x4`
 
-Note: `--canvas-ratio` is the aspect ratio of the **full grid**, not a single cell. For 3x3 with ratio 1:1, each cell is square.
-
-Some layout/ratio combinations are unsupported — the script will error and suggest alternatives.
+`--canvas-ratio` is the aspect ratio of the **full grid**, not a single cell. Some layout/ratio combinations are unsupported — the script will error and suggest alternatives.
 
 ---
 
@@ -115,12 +119,12 @@ Use `--input` for style transfer or editing. Up to 14 images, 7 MB each. Formats
 
 ## Post-generation
 
-`generate.js` saves results to `bulkgen-result.json`. Image URLs expire in 12 hours — always build the preview immediately so the user can view and download while URLs are still valid.
+Image URLs expire in 12 hours — always build the preview immediately.
 
 ```bash
 SCRIPTS=~/.claude/skills/bulkgen/scripts
 
-# Build HTML preview (default: always run this)
+# Build HTML preview (always run this)
 node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && open ./bulkgen-preview.html
 
 # Download permanent local copies (only if user explicitly asks)
@@ -133,7 +137,7 @@ node $SCRIPTS/download_images.js ./bulkgen-result.json ./downloads
 
 | Status | Action |
 |--------|--------|
-| 401 | Invalid key → get new one at bulk-gen.com |
-| 402 | Insufficient credits → top up |
-| 400 | Invalid params → check layout/ratio compatibility |
-| 500 | Server error → retry |
+| 401 | Invalid key — ask user to check or get a new one at bulk-gen.com |
+| 402 | Insufficient credits — ask user to top up at bulk-gen.com |
+| 400 | Invalid params — check layout/ratio compatibility |
+| 500 | Server error — retry once |
