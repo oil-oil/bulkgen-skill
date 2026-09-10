@@ -1,42 +1,32 @@
 ---
 name: bulkgen
-description: >-
-  Bulk AI image generation via the BulkGen API. Use whenever users ask to generate
-  one or many AI images — even simple requests like "generate an image", "edit this image",
-  "make variations", or "create AI art" should trigger this skill. Handles single images,
-  grids, variations, reference-image editing, expiring result downloads, and HTML
-  preview handoff pages. Works for English and Chinese requests like "生成图片", "批量生成",
-  "图生图", "做一个 3x3 宫格", or "给我做九宫格变体".
+description: "生成单图、批量图片、宫格变体和参考图编辑结果，并生成 HTML 预览与下载入口。用户明确选择 bulkgen 或需要其批量宫格工作流时使用。不因普通生图请求自动替换已选工具；不用于视频、矢量绘图或屏幕操作。"
 ---
 
 # BulkGen Agent Skill
 
-Generate AI images with BulkGen. Scripts are bundled at `~/.claude/skills/bulkgen/scripts/` — always use this full path.
+通过 BulkGen 生成图片。将当前 `SKILL.md` 所在绝对目录记为 `SKILL_DIR`，脚本位于其 `scripts/` 下；产物写入任务目录。
 
 **Language**: Always respond in the user's language. This skill is written in English for consistency, but all replies to the user should match their language.
 
 ---
 
+## API Key 配置入口
+
+需要外部服务凭据时先读[API Key 配置与业务读取](references/api-key-setup.md)：复用已有安全入口；本机缺少 Key 时使用随附固定页面，保存后通过业务包装入口读取。内置能力与纯本地流程不要求配置 Key。
+
 ## API Key
 
-No environment variable setup needed. When the user asks to generate images:
+业务脚本只使用运行时注入的 `BULKGEN_API_KEY`。已有凭据时直接复用；缺少时按配置说明打开本机页面，由用户亲自保存。通过随附 run 入口向生成脚本注入凭据。不要让用户把密钥发到聊天，不将密钥写进命令、Skill、项目文件或日志。
 
-1. Check if `BULKGEN_API_KEY` is already set in the environment.
-2. If **not set**, ask the user in their language to share their key (format: `sk_live_...`). They can get one at bulk-gen.com → user menu → API Keys.
-3. Once received, pass it inline — do not `export` it or persist it anywhere:
-
-```bash
-BULKGEN_API_KEY="sk_live_..." node $SCRIPTS/generate.js ...
-```
-
-If the user gets a 401 error, ask them to check their key or get a new one at bulk-gen.com.
+无安全入口时说明缺少配置，保留已完成的本地准备。401 表示认证失败，先核对凭据状态，不自动反复提交生成任务。
 
 ---
 
 ## Workflow
 
 1. **Clarify** → If parameters are ambiguous, ask ratio + mode before generating
-2. **Generate** → Run `generate.js` with the user's key inline
+2. **Generate** → Run `generate.js` using the configured runtime credential
 3. **Preview** → Always run `build_preview.js` and `open` the HTML immediately after
 
 ---
@@ -60,20 +50,19 @@ If the user says they don't mind or leaves it to you, use defaults (1:1 + variat
 ## Quick start
 
 ```bash
-SCRIPTS=~/.claude/skills/bulkgen/scripts
-KEY="sk_live_..."   # key provided by the user
+SCRIPTS="$SKILL_DIR/scripts"
 
 # Single image
-BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "a sunset" --mode solo
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "a sunset" --mode solo
 
 # 3x3 variations (same prompt, different styles)
-BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 1:1
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 1:1
 
 # 2x2 batch (different prompts per cell)
-BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
 
 # Edit with reference image
-BULKGEN_API_KEY=$KEY node $SCRIPTS/generate.js --prompts "watercolor style" --input ./photo.jpg
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "watercolor style" --input ./photo.jpg
 
 # Build preview and open (always do this after generating)
 node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && open ./bulkgen-preview.html
@@ -122,7 +111,7 @@ Use `--input` for style transfer or editing. Up to 14 images, 7 MB each. Formats
 Image URLs expire in 12 hours — always build the preview immediately.
 
 ```bash
-SCRIPTS=~/.claude/skills/bulkgen/scripts
+SCRIPTS="$SKILL_DIR/scripts"
 
 # Build HTML preview (always run this)
 node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && open ./bulkgen-preview.html

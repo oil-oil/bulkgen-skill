@@ -57,7 +57,7 @@ OPTIONS
   --source-ratio <ratio> Optional source aspect ratio override
   --input <path>         Reference image(s) for editing (can repeat)
   --output <path>        Output JSON file path (default: ./bulkgen-result.json)
-  --api-key <key>        API key (or set BULKGEN_API_KEY env var)
+  API 凭据仅从运行环境 BULKGEN_API_KEY 读取，不传命令参数
   --help                 Show this help
 
 MODES
@@ -153,8 +153,7 @@ function parseArgs(args) {
     }
 
     if (arg === "--api-key") {
-      result.apiKey = args[++i];
-      continue;
+      throw new Error("--api-key 已停用：请由可信运行环境注入 BULKGEN_API_KEY，勿把密钥写进命令或聊天。");
     }
   }
 
@@ -390,11 +389,11 @@ function encodeImage(filePath) {
 }
 
 async function callAPI(params, prepared) {
-  const apiKey = params.apiKey || process.env.BULKGEN_API_KEY;
+  const apiKey = process.env.BULKGEN_API_KEY;
 
   if (!apiKey) {
     throw new Error(
-      "Missing API key. Set BULKGEN_API_KEY environment variable or use --api-key option.\n" +
+      "Missing API key. 由可信运行环境注入 BULKGEN_API_KEY，勿使用命令参数或聊天传递。\n" +
         "Get your key at https://bulk-gen.com (user menu → API Keys)"
     );
   }
