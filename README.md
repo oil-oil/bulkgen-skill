@@ -1,6 +1,6 @@
 # BulkGen Skill
 
-BulkGen skill for AI agents. Generate one or many AI images with a single request, edit images with reference photos, auto-resolve compatible canvas/source ratios, and optionally package the result into a lightweight HTML preview page with download buttons.
+生成单图、批量图片、宫格变体和参考图编辑结果，并整理为可预览、下载的图片集合。
 
 ## Install
 
@@ -24,7 +24,7 @@ If the key is not configured yet, get it from `https://bulk-gen.com`:
 2. Open the user menu
 3. Choose `API Keys`
 4. Create a new key
-5. 通过宿主安全凭据入口或自己的终端会话注入 `BULKGEN_API_KEY`；不要粘贴到 Agent 对话。
+5. 按文末配置说明打开本机页面；保存后通过 run 包装生成命令，不要粘贴到 Agent 对话。
 
 ## What it does
 
@@ -56,3 +56,9 @@ If the key is not configured yet, get it from `https://bulk-gen.com`:
 ```text
 用 bulkgen 按这些主题批量生成图像。
 ```
+
+## API Key 配置页面
+
+首次使用外部服务时，可以在本机配置页亲自填写 Key；已有配置会复用，密钥存入系统凭据库。只为实际使用的外部服务配置；纯本地处理不需要 Key。页面需要 Node.js 22.18+ 与可用的系统凭据服务，业务运行仍使用原依赖。
+
+安装、状态检查、打开页面和带凭据运行的完整入口见[配置说明](bulkgen/references/api-key-setup.md)。页面保存与业务读取已经接通；不把 Key 发进聊天，也不自动迁移旧文件。

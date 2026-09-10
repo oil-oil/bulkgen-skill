@@ -1,6 +1,6 @@
 ---
 name: bulkgen
-description: "通过 BulkGen API 生成单图、批量图、宫格变体或参考图编辑，并生成 HTML 预览和按需下载结果。用户明确选择 BulkGen 或需要其批量宫格工作流时使用。不因普通生图或图片编辑请求自动替换用户已选工具；不用于视频制作、矢量绘图或屏幕操作。"
+description: "生成单图、批量图片、宫格变体和参考图编辑结果，并生成 HTML 预览与下载入口。用户明确选择 bulkgen 或需要其批量宫格工作流时使用。不因普通生图请求自动替换已选工具；不用于视频、矢量绘图或屏幕操作。"
 ---
 
 # BulkGen Agent Skill
@@ -11,9 +11,13 @@ description: "通过 BulkGen API 生成单图、批量图、宫格变体或参�
 
 ---
 
+## API Key 配置入口
+
+需要外部服务凭据时先读[API Key 配置与业务读取](references/api-key-setup.md)：复用已有安全入口；本机缺少 Key 时使用随附固定页面，保存后通过业务包装入口读取。内置能力与纯本地流程不要求配置 Key。
+
 ## API Key
 
-业务脚本只使用运行时注入的 `BULKGEN_API_KEY`。已有凭据时直接复用；缺少时引导用户在服务官方入口创建，并通过宿主安全凭据入口或用户自己的终端会话注入。不要让用户把密钥发到聊天，不将密钥写进命令、Skill、项目文件或日志。
+业务脚本只使用运行时注入的 `BULKGEN_API_KEY`。已有凭据时直接复用；缺少时按配置说明打开本机页面，由用户亲自保存。通过随附 run 入口向生成脚本注入凭据。不要让用户把密钥发到聊天，不将密钥写进命令、Skill、项目文件或日志。
 
 无安全入口时说明缺少配置，保留已完成的本地准备。401 表示认证失败，先核对凭据状态，不自动反复提交生成任务。
 
@@ -49,16 +53,16 @@ If the user says they don't mind or leaves it to you, use defaults (1:1 + variat
 SCRIPTS="$SKILL_DIR/scripts"
 
 # Single image
-node $SCRIPTS/generate.js --prompts "a sunset" --mode solo
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "a sunset" --mode solo
 
 # 3x3 variations (same prompt, different styles)
-node $SCRIPTS/generate.js --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 1:1
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "cyberpunk city" --mode variation --cols 3 --rows 3 --canvas-ratio 1:1
 
 # 2x2 batch (different prompts per cell)
-node $SCRIPTS/generate.js --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "cat" "dog" "bird" "fish" --cols 2 --rows 2
 
 # Edit with reference image
-node $SCRIPTS/generate.js --prompts "watercolor style" --input ./photo.jpg
+node "$SCRIPTS/credential-ui/src/profile.ts" run default -- node "$SCRIPTS/generate.js" --prompts "watercolor style" --input ./photo.jpg
 
 # Build preview and open (always do this after generating)
 node $SCRIPTS/build_preview.js ./bulkgen-result.json ./bulkgen-preview.html && open ./bulkgen-preview.html

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "id": "bulkgen",
+  "label": "批量图片服务 API Key",
+  "credential": "bulkgen/service/default",
+  "ui": {
+    "title": "配置服务",
+    "placeholder": "粘贴该服务的 API Key",
+    "saveLabel": "保存"
+  }
+}
